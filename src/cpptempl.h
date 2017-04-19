@@ -26,7 +26,7 @@
 namespace cpptempl {
 
 
-void SplitString(const std::string& str,
+inline void SplitString(const std::string& str,
                  const char* delim,
                  std::vector<std::string>* result) {
   char *cstr, *p;
@@ -358,7 +358,7 @@ class auto_data {
 // parse_val
 //////////////////////////////////////////////////////////////////////////
 // will call auto_data copy constructor
-auto_data parse_val(std::string key, const auto_data& data) {
+inline auto_data parse_val(std::string key, const auto_data& data) {
   // quoted string
   if (key[0] == '\"') {
     size_t index = key.substr(1).find_last_of("\"");
@@ -579,7 +579,7 @@ class TokenEnd : public Token {
 // tokenize
 // parses a template into tokens (text, for, if, variable)
 //////////////////////////////////////////////////////////////////////////
-token_vector tokenize(std::string text) {
+inline token_vector tokenize(std::string text) {
   token_vector tokens;
   while (!text.empty()) {
     size_t pos = text.find("{");
@@ -640,7 +640,7 @@ token_vector tokenize(std::string text) {
 // parse_tree
 // recursively parses list of tokens into a tree
 //////////////////////////////////////////////////////////////////////////
-void parse_tree(token_vector* tokens,
+inline void parse_tree(token_vector* tokens,
                 token_vector* tree,
                 TokenType until = TOKEN_TYPE_NONE) {
   while (!tokens->empty()) {
@@ -662,7 +662,7 @@ void parse_tree(token_vector* tokens,
 }
 
 
-std::string parse(std::string templ_text, const auto_data& data) {
+inline std::string parse(std::string templ_text, const auto_data& data) {
   token_vector tokens;
   tokens = tokenize(templ_text);
   token_vector tree;
