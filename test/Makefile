@@ -20,3 +20,4 @@ test : $(OBJECTS)
 clean:
 	-rm *.o *.d
 	-rm *.d.*
+	-rm test
