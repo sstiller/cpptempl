@@ -40,6 +40,9 @@ inline void SplitString(const std::string& str,
   delete[] cstr;
 }
 
+class auto_data;
+using data_stack = std::vector<auto_data>;
+
 class auto_data {
  public:
   ///////////////////////////
@@ -408,7 +411,7 @@ class Token {
   virtual void set_children(const token_vector&) {
     printf("this token can't set child\n");
   }
-  virtual std::string get_text(const auto_data&) { return ""; }
+  virtual std::string get_text(data_stack&, const auto_data&) { return ""; }
 };
 
 
@@ -420,8 +423,8 @@ class TokenText : public Token {
   std::string m_text;
  public:
   explicit TokenText(std::string text) : m_text(text) {}
-  TokenType gettype() { return TOKEN_TYPE_TEXT;}
-  std::string get_text(const auto_data&) {
+  TokenType gettype() override { return TOKEN_TYPE_TEXT;}
+  std::string get_text(data_stack&, const auto_data&) override {
     return m_text;
   }
 };
@@ -433,9 +436,21 @@ class TokenVar : public Token {
 
  public:
   explicit TokenVar(std::string key) : m_key(key) {}
-  TokenType gettype() { return TOKEN_TYPE_VAR;}
-  std::string get_text(const auto_data& data) {
-    auto_data ret = parse_val(m_key, data);
+  TokenType gettype() override { return TOKEN_TYPE_VAR;}
+  std::string get_text(data_stack& datastack, const auto_data& data) override {
+    auto_data ret;
+    // first check the stack
+    for (auto dataIt = datastack.rbegin(); dataIt != datastack.rend(); dataIt++) {
+      ret = parse_val(m_key, *dataIt);
+      if (ret.Type() != auto_data::data_type::null) {
+        break;
+      }
+    }
+
+    // if nothing on stack, check data
+    if (ret.Type() == auto_data::data_type::null){
+      ret = parse_val(m_key, data);
+    }
     std::string str = "";
     switch (ret.Type()) {
       case auto_data::data_type::string: {
@@ -489,14 +504,14 @@ class TokenFor : public Token {
     m_val = elements[1];
     m_key = elements[3];
   }
-  TokenType gettype() { return TOKEN_TYPE_FOR;}
-  void set_children(const token_vector &children) {
+  TokenType gettype() override { return TOKEN_TYPE_FOR;}
+  void set_children(const token_vector &children) override {
     m_children.assign(children.begin(), children.end());
   }
   token_vector &get_children() {
     return m_children;
   }
-  std::string get_text(const auto_data& data) {
+  std::string get_text(data_stack& datastack, const auto_data& data) override {
     if (!data.has(m_key)) {
       printf("has no key:%s\n", m_key.c_str());
       return "";
@@ -506,10 +521,12 @@ class TokenFor : public Token {
     std::string str = "";
     for (int i = 0; i < listSize; i++) {
       auto_data d;
-      d[m_val] = l[i];;  // this will call operator=, and will create new object
+      d[m_val] = l[i];  // this will call operator=, and will create new object
+      datastack.push_back(d);
       for (size_t j = 0; j < m_children.size(); ++j) {
-        str += m_children[j]->get_text(d);
+        str += m_children[j]->get_text(datastack, data);
       }
+      datastack.pop_back();
     }
     return str;
   }
@@ -521,16 +538,16 @@ class TokenIf : public Token {
   std::string m_expr;
   token_vector m_children;
   explicit TokenIf(std::string expr) : m_expr(expr) {}
-  TokenType gettype() { return TOKEN_TYPE_IF;}
-  void set_children(const token_vector &children) {
+  TokenType gettype() override { return TOKEN_TYPE_IF;}
+  void set_children(const token_vector &children) override {
     m_children.assign(children.begin(), children.end());
   }
   token_vector &get_children() { return m_children;}
-  std::string get_text(const auto_data& data) {
+  std::string get_text(data_stack& datastack, const auto_data& data) override {
     std::string str = "";
     if (is_true(data)) {
       for (size_t j = 0; j < m_children.size(); ++j) {
-        str += m_children[j]->get_text(data);
+        str += m_children[j]->get_text(datastack, data);
       }
     } else {
       // printf("is not true:%s\n", m_expr.c_str());
@@ -567,7 +584,7 @@ class TokenEnd : public Token {
   std::string m_type;
  public:
   explicit TokenEnd(std::string text) : m_type(text) {}
-  TokenType gettype() {
+  TokenType gettype() override {
     return m_type == "endfor" ? TOKEN_TYPE_ENDFOR : TOKEN_TYPE_ENDIF;
   }
 };
@@ -667,10 +684,11 @@ inline std::string parse(std::string templ_text, const auto_data& data) {
   tokens = tokenize(templ_text);
   token_vector tree;
   parse_tree(&tokens, &tree);
+  data_stack datastack;
 
   std::string str = "";
   for (size_t i = 0 ; i < tree.size() ; ++i) {
-    str =  str + tree[i]->get_text(data);
+    str =  str + tree[i]->get_text(datastack, data);
   }
   return str;
 }
