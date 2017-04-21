@@ -204,7 +204,8 @@ class auto_data {
 
   bool operator ==(const auto_data& data) {
     if (this->type != data.type) {
-      return false;
+      // make a string comparison
+      return((std::string)*this == (std::string)data);;
     }
     switch (type) {
       case data_type::string: {
@@ -240,16 +241,23 @@ class auto_data {
     }
   }
   operator std::string() const {
-    std::string str = "";
     switch (type) {
       case data_type::string: {
-        str = std::string((*(value.str)));
-        break;
+        return(*(value.str));
+      }
+      case data_type::boolean: {
+        return std::to_string(value.boolean);
+      }
+      case data_type::number_integer: {
+        return std::to_string(value.int_val);
+      }
+      case data_type::number_float: {
+        return std::to_string(value.f_val);
       }
       default:
         break;
     }
-    return str;
+    return std::string();
   }
   operator int() const {
     int64_t v = 0;
@@ -361,7 +369,7 @@ class auto_data {
 // parse_val
 //////////////////////////////////////////////////////////////////////////
 // will call auto_data copy constructor
-inline auto_data parse_val(std::string key, const auto_data& data) {
+inline auto_data parse_val(std::string key, const auto_data& data, const data_stack& datastack = data_stack()) {
   // quoted string
   if (key[0] == '\"') {
     size_t index = key.substr(1).find_last_of("\"");
@@ -372,6 +380,11 @@ inline auto_data parse_val(std::string key, const auto_data& data) {
   }
   size_t index = key.find(".");
   if (index == std::string::npos) {
+    for (auto dataIt = datastack.rbegin(); dataIt != datastack.rend(); dataIt++) {
+      if (dataIt->has(key)) {
+        return dataIt->Get(key);
+      }
+    }
     if (!data.has(key)) {
       return auto_data();
     }
@@ -379,6 +392,13 @@ inline auto_data parse_val(std::string key, const auto_data& data) {
   }
 
   std::string sub_key = key.substr(0, index);
+  for (auto dataIt = datastack.rbegin(); dataIt != datastack.rend(); dataIt++) {
+    if (dataIt->has(sub_key)) {
+      const auto_data& item = dataIt->Get(sub_key);
+      return parse_val(key.substr(index+1), item);
+    }
+  }
+
   if (!data.has(sub_key)) {
     return auto_data();
   }
@@ -438,19 +458,7 @@ class TokenVar : public Token {
   explicit TokenVar(std::string key) : m_key(key) {}
   TokenType gettype() override { return TOKEN_TYPE_VAR;}
   std::string get_text(data_stack& datastack, const auto_data& data) override {
-    auto_data ret;
-    // first check the stack
-    for (auto dataIt = datastack.rbegin(); dataIt != datastack.rend(); dataIt++) {
-      ret = parse_val(m_key, *dataIt);
-      if (ret.Type() != auto_data::data_type::null) {
-        break;
-      }
-    }
-
-    // if nothing on stack, check data
-    if (ret.Type() == auto_data::data_type::null){
-      ret = parse_val(m_key, data);
-    }
+    auto_data ret = parse_val(m_key, data, datastack);
     std::string str = "";
     switch (ret.Type()) {
       case auto_data::data_type::string: {
@@ -545,7 +553,7 @@ class TokenIf : public Token {
   token_vector &get_children() { return m_children;}
   std::string get_text(data_stack& datastack, const auto_data& data) override {
     std::string str = "";
-    if (is_true(data)) {
+    if (is_true(data, datastack)) {
       for (size_t j = 0; j < m_children.size(); ++j) {
         str += m_children[j]->get_text(datastack, data);
       }
@@ -554,22 +562,22 @@ class TokenIf : public Token {
     }
     return str;
   }
-  bool is_true(const auto_data& data) {
+  bool is_true(const auto_data& data, const data_stack& datastack) {
     std::vector<std::string> elements;
     char split[] = " ";
     SplitString(m_expr, split, &elements);
     if (elements.size() == 1) {
       return false;
     } else if (elements.size() == 2) {
-      return parse_val(elements[1], data).is_true();
+      return parse_val(elements[1], data, datastack).is_true();
     } else if (elements.size() == 3) {
       if (elements[1] == "not") {
-        return !parse_val(elements[2], data).is_true();
+        return !parse_val(elements[2], data, datastack).is_true();
       }
     } else if (elements.size() == 4) {
       if (elements[2] == "==") {
-        auto_data lhs = parse_val(elements[1], data);
-        auto_data rhs = parse_val(elements[3], data);
+        auto_data lhs = parse_val(elements[1], data, datastack);
+        auto_data rhs = parse_val(elements[3], data, datastack);
         return lhs == rhs;
       }
     }
