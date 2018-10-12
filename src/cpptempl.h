@@ -126,7 +126,7 @@ class auto_data {
   auto_data(double v)  // NOLINT
       : type(data_type::number_float), value(v) {}
   auto_data(const auto_data& data)
-    :type(data.type)
+	  :type(data.type)
      , map_data(data.map_data)
      , list_data(data.list_data)
   {
@@ -227,12 +227,12 @@ class auto_data {
     return false;
   }
 
-  friend void swap (auto_data& first, auto_data& second) {
-    using std::swap;
-    swap(first.value, second.value);
-    swap(first.map_data, second.map_data);
-    swap(first.list_data, second.list_data);
-    swap(first.type, second.type);
+  static void swap (auto_data& first, auto_data& second) {
+	  using std::swap;
+	  swap(first.value, second.value);
+	  swap(first.map_data, second.map_data);
+	  swap(first.list_data, second.list_data);
+	  swap(first.type, second.type);
   }
   // assignment operator
   auto_data& operator =(auto_data data) {
