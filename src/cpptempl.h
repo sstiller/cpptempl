@@ -192,7 +192,10 @@ class auto_data {
   int size() const {
     return list_data.size();
   }
-  auto_data operator[](int index) const {
+  auto_data& operator[](int index) {
+    return list_data[index];
+  }
+  const auto_data& operator[](int index) const {
     return list_data[index];
   }
   void push_back(const auto_data& data) {
@@ -228,11 +231,11 @@ class auto_data {
   }
 
   static void swap (auto_data& first, auto_data& second) {
-	  using std::swap;
-	  swap(first.value, second.value);
-	  swap(first.map_data, second.map_data);
-	  swap(first.list_data, second.list_data);
-	  swap(first.type, second.type);
+    using std::swap;
+    swap(first.value, second.value);
+    swap(first.map_data, second.map_data);
+    swap(first.list_data, second.list_data);
+    swap(first.type, second.type);
   }
   // assignment operator
   auto_data& operator =(auto_data data) {
