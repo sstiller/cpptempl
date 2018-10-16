@@ -231,11 +231,11 @@ class auto_data {
   }
 
   static void swap (auto_data& first, auto_data& second) {
-	  using std::swap;
-	  swap(first.value, second.value);
-	  swap(first.map_data, second.map_data);
-	  swap(first.list_data, second.list_data);
-	  swap(first.type, second.type);
+    using std::swap;
+    swap(first.value, second.value);
+    swap(first.map_data, second.map_data);
+    swap(first.list_data, second.list_data);
+    swap(first.type, second.type);
   }
   // assignment operator
   auto_data& operator =(auto_data data) {
