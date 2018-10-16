@@ -334,7 +334,7 @@ class auto_data {
     return type;
   }
 
-  bool empty() {
+  bool empty() const {
     return type == data_type::null;
   }
 
