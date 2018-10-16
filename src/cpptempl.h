@@ -192,7 +192,10 @@ class auto_data {
   int size() const {
     return list_data.size();
   }
-  auto_data operator[](int index) const {
+  auto_data& operator[](int index) {
+    return list_data[index];
+  }
+  const auto_data& operator[](int index) const {
     return list_data[index];
   }
   void push_back(const auto_data& data) {
