@@ -26,7 +26,7 @@
 namespace cpptempl {
 
 
-void SplitString(const std::string& str,
+inline void SplitString(const std::string& str,
                  const char* delim,
                  std::vector<std::string>* result) {
   char *cstr, *p;
@@ -39,6 +39,9 @@ void SplitString(const std::string& str,
   }
   delete[] cstr;
 }
+
+class auto_data;
+using data_stack = std::vector<auto_data>;
 
 class auto_data {
  public:
@@ -122,15 +125,13 @@ class auto_data {
       : type(data_type::number_integer), value((int64_t)v) {}
   auto_data(double v)  // NOLINT
       : type(data_type::number_float), value(v) {}
-  auto_data(const auto_data& data) {
-    type = data.type;
+  auto_data(const auto_data& data)
+	  :type(data.type)
+     , map_data(data.map_data)
+     , list_data(data.list_data)
+  {
     if (data.type == data_type::string) {
       value.str = new std::string(*(data.value.str));
-    } else if (data.type == data_type::map) {
-      for (auto& item : data.map_data) {
-        auto_data d = item.second;
-        map_data[item.first] = d;
-      }
     } else {
       value = data.value;
     }
@@ -185,13 +186,16 @@ class auto_data {
     }
     return map_data.at(key);
   }
-  
+
 
   // vector
   int size() const {
     return list_data.size();
   }
-  auto_data operator[](int index) const {
+  auto_data& operator[](int index) {
+    return list_data[index];
+  }
+  const auto_data& operator[](int index) const {
     return list_data[index];
   }
   void push_back(const auto_data& data) {
@@ -201,7 +205,8 @@ class auto_data {
 
   bool operator ==(const auto_data& data) {
     if (this->type != data.type) {
-      return false;
+      // make a string comparison
+      return((std::string)*this == (std::string)data);;
     }
     switch (type) {
       case data_type::string: {
@@ -225,28 +230,36 @@ class auto_data {
     return false;
   }
 
+  static void swap (auto_data& first, auto_data& second) {
+    using std::swap;
+    swap(first.value, second.value);
+    swap(first.map_data, second.map_data);
+    swap(first.list_data, second.list_data);
+    swap(first.type, second.type);
+  }
   // assignment operator
-  void operator =(const auto_data& data) {
-    type = data.type;
-    if (data.type == data_type::string) {
-      value.str = new std::string(data.value.str->c_str());
-    } else if (data.type == data_type::map) {
-      map_data = data.map_data;
-    } else {
-      value = data.value;
-    }
+  auto_data& operator =(auto_data data) {
+    swap(*this, data);
+    return *this;
   }
   operator std::string() const {
-    std::string str = "";
     switch (type) {
       case data_type::string: {
-        str = std::string((*(value.str)));
-        break;
+        return(*(value.str));
+      }
+      case data_type::boolean: {
+        return std::to_string(value.boolean);
+      }
+      case data_type::number_integer: {
+        return std::to_string(value.int_val);
+      }
+      case data_type::number_float: {
+        return std::to_string(value.f_val);
       }
       default:
         break;
     }
-    return str;
+    return std::string();
   }
   operator int() const {
     int64_t v = 0;
@@ -321,7 +334,7 @@ class auto_data {
     return type;
   }
 
-  bool empty() {
+  bool empty() const {
     return type == data_type::null;
   }
 
@@ -358,7 +371,7 @@ class auto_data {
 // parse_val
 //////////////////////////////////////////////////////////////////////////
 // will call auto_data copy constructor
-auto_data parse_val(std::string key, const auto_data& data) {
+inline auto_data parse_val(std::string key, const auto_data& data, const data_stack& datastack = data_stack()) {
   // quoted string
   if (key[0] == '\"') {
     size_t index = key.substr(1).find_last_of("\"");
@@ -369,6 +382,11 @@ auto_data parse_val(std::string key, const auto_data& data) {
   }
   size_t index = key.find(".");
   if (index == std::string::npos) {
+    for (auto dataIt = datastack.rbegin(); dataIt != datastack.rend(); dataIt++) {
+      if (dataIt->has(key)) {
+        return dataIt->Get(key);
+      }
+    }
     if (!data.has(key)) {
       return auto_data();
     }
@@ -376,6 +394,13 @@ auto_data parse_val(std::string key, const auto_data& data) {
   }
 
   std::string sub_key = key.substr(0, index);
+  for (auto dataIt = datastack.rbegin(); dataIt != datastack.rend(); dataIt++) {
+    if (dataIt->has(sub_key)) {
+      const auto_data& item = dataIt->Get(sub_key);
+      return parse_val(key.substr(index+1), item);
+    }
+  }
+
   if (!data.has(sub_key)) {
     return auto_data();
   }
@@ -408,7 +433,7 @@ class Token {
   virtual void set_children(const token_vector&) {
     printf("this token can't set child\n");
   }
-  virtual std::string get_text(const auto_data&) { return ""; }
+  virtual std::string get_text(data_stack&, const auto_data&) { return ""; }
 };
 
 
@@ -420,8 +445,8 @@ class TokenText : public Token {
   std::string m_text;
  public:
   explicit TokenText(std::string text) : m_text(text) {}
-  TokenType gettype() { return TOKEN_TYPE_TEXT;}
-  std::string get_text(const auto_data&) {
+  TokenType gettype() override { return TOKEN_TYPE_TEXT;}
+  std::string get_text(data_stack&, const auto_data&) override {
     return m_text;
   }
 };
@@ -433,9 +458,9 @@ class TokenVar : public Token {
 
  public:
   explicit TokenVar(std::string key) : m_key(key) {}
-  TokenType gettype() { return TOKEN_TYPE_VAR;}
-  std::string get_text(const auto_data& data) {
-    auto_data ret = parse_val(m_key, data);
+  TokenType gettype() override { return TOKEN_TYPE_VAR;}
+  std::string get_text(data_stack& datastack, const auto_data& data) override {
+    auto_data ret = parse_val(m_key, data, datastack);
     std::string str = "";
     switch (ret.Type()) {
       case auto_data::data_type::string: {
@@ -489,14 +514,14 @@ class TokenFor : public Token {
     m_val = elements[1];
     m_key = elements[3];
   }
-  TokenType gettype() { return TOKEN_TYPE_FOR;}
-  void set_children(const token_vector &children) {
+  TokenType gettype() override { return TOKEN_TYPE_FOR;}
+  void set_children(const token_vector &children) override {
     m_children.assign(children.begin(), children.end());
   }
   token_vector &get_children() {
     return m_children;
   }
-  std::string get_text(const auto_data& data) {
+  std::string get_text(data_stack& datastack, const auto_data& data) override {
     if (!data.has(m_key)) {
       printf("has no key:%s\n", m_key.c_str());
       return "";
@@ -506,10 +531,12 @@ class TokenFor : public Token {
     std::string str = "";
     for (int i = 0; i < listSize; i++) {
       auto_data d;
-      d[m_val] = l[i];;  // this will call operator=, and will create new object
+      d[m_val] = l[i];  // this will call operator=, and will create new object
+      datastack.push_back(d);
       for (size_t j = 0; j < m_children.size(); ++j) {
-        str += m_children[j]->get_text(d);
+        str += m_children[j]->get_text(datastack, data);
       }
+      datastack.pop_back();
     }
     return str;
   }
@@ -521,38 +548,38 @@ class TokenIf : public Token {
   std::string m_expr;
   token_vector m_children;
   explicit TokenIf(std::string expr) : m_expr(expr) {}
-  TokenType gettype() { return TOKEN_TYPE_IF;}
-  void set_children(const token_vector &children) {
+  TokenType gettype() override { return TOKEN_TYPE_IF;}
+  void set_children(const token_vector &children) override {
     m_children.assign(children.begin(), children.end());
   }
   token_vector &get_children() { return m_children;}
-  std::string get_text(const auto_data& data) {
+  std::string get_text(data_stack& datastack, const auto_data& data) override {
     std::string str = "";
-    if (is_true(data)) {
+    if (is_true(data, datastack)) {
       for (size_t j = 0; j < m_children.size(); ++j) {
-        str += m_children[j]->get_text(data);
+        str += m_children[j]->get_text(datastack, data);
       }
     } else {
       // printf("is not true:%s\n", m_expr.c_str());
     }
     return str;
   }
-  bool is_true(const auto_data& data) {
+  bool is_true(const auto_data& data, const data_stack& datastack) {
     std::vector<std::string> elements;
     char split[] = " ";
     SplitString(m_expr, split, &elements);
     if (elements.size() == 1) {
       return false;
     } else if (elements.size() == 2) {
-      return parse_val(elements[1], data).is_true();
+      return parse_val(elements[1], data, datastack).is_true();
     } else if (elements.size() == 3) {
       if (elements[1] == "not") {
-        return !parse_val(elements[2], data).is_true();
+        return !parse_val(elements[2], data, datastack).is_true();
       }
     } else if (elements.size() == 4) {
       if (elements[2] == "==") {
-        auto_data lhs = parse_val(elements[1], data);
-        auto_data rhs = parse_val(elements[3], data);
+        auto_data lhs = parse_val(elements[1], data, datastack);
+        auto_data rhs = parse_val(elements[3], data, datastack);
         return lhs == rhs;
       }
     }
@@ -567,7 +594,7 @@ class TokenEnd : public Token {
   std::string m_type;
  public:
   explicit TokenEnd(std::string text) : m_type(text) {}
-  TokenType gettype() {
+  TokenType gettype() override {
     return m_type == "endfor" ? TOKEN_TYPE_ENDFOR : TOKEN_TYPE_ENDIF;
   }
 };
@@ -579,7 +606,7 @@ class TokenEnd : public Token {
 // tokenize
 // parses a template into tokens (text, for, if, variable)
 //////////////////////////////////////////////////////////////////////////
-token_vector tokenize(std::string text) {
+inline token_vector tokenize(std::string text) {
   token_vector tokens;
   while (!text.empty()) {
     size_t pos = text.find("{");
@@ -640,7 +667,7 @@ token_vector tokenize(std::string text) {
 // parse_tree
 // recursively parses list of tokens into a tree
 //////////////////////////////////////////////////////////////////////////
-void parse_tree(token_vector* tokens,
+inline void parse_tree(token_vector* tokens,
                 token_vector* tree,
                 TokenType until = TOKEN_TYPE_NONE) {
   while (!tokens->empty()) {
@@ -662,15 +689,16 @@ void parse_tree(token_vector* tokens,
 }
 
 
-std::string parse(std::string templ_text, const auto_data& data) {
+inline std::string parse(std::string templ_text, const auto_data& data) {
   token_vector tokens;
   tokens = tokenize(templ_text);
   token_vector tree;
   parse_tree(&tokens, &tree);
+  data_stack datastack;
 
   std::string str = "";
   for (size_t i = 0 ; i < tree.size() ; ++i) {
-    str =  str + tree[i]->get_text(data);
+    str =  str + tree[i]->get_text(datastack, data);
   }
   return str;
 }

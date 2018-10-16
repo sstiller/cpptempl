@@ -129,3 +129,25 @@ TEST_CASE("cpptempl5", "for block") {
   ret = cpptempl::parse(str, data2);
   REQUIRE(ret == "name:xu name:car ");
 }
+
+
+TEST_CASE("cpptempl6", "for encapsulation") {
+  // for loop inside for loop
+  cpptempl::auto_data data;
+  for(int i = 1; i <= 3; i++) {
+    data["test"].push_back(i);
+  }
+  for(int i = 5; i <= 7; i++) {
+    data["test2"].push_back(i);
+  }
+  std::string str("{%for d in test%}{%for d2 in test2%}{$d}.{$d2}:{% endfor %} {% endfor %}");
+  std::string ret(cpptempl::parse(str, data));
+  REQUIRE(ret == "1.5:1.6:1.7: 2.5:2.6:2.7: 3.5:3.6:3.7: ");
+
+  // "if" inside for loop
+  str = "{%for d in test%}{%if d == \"2\" %}test:{$d}{% endif %}{% endfor %}";
+  ret = (cpptempl::parse(str, data));
+  REQUIRE(ret == "test:2");
+
+}
+
