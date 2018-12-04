@@ -192,11 +192,13 @@ class auto_data {
   int size() const {
     return list_data.size();
   }
+  /** @throws std::out_of_range */
   auto_data& operator[](int index) {
-    return list_data[index];
+    return list_data.at(index);
   }
+  /** @throws std::out_of_range */
   const auto_data& operator[](int index) const {
-    return list_data[index];
+    return list_data.at(index);
   }
   void push_back(const auto_data& data) {
     type = data_type::list;
