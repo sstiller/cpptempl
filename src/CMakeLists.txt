@@ -1,0 +1,14 @@
+file(GLOB HDRS "*.h")
+
+set(HEADER_INSTALL_PATH include)
+
+add_library(${PROJECT_NAME} INTERFACE)
+add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
+
+target_include_directories(${PROJECT_NAME}
+  INTERFACE
+  $<INSTALL_INTERFACE:${HEADER_INSTALL_PATH}>
+)
+
+install(FILES ${HDRS} DESTINATION ${HEADER_INSTALL_PATH})
+
