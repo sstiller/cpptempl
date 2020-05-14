@@ -3,6 +3,9 @@ set (CMAKE_INSTALL_PREFIX /usr/)
 option(BUILD_TESTS "enable building test applications" ON)
 project(cpptempl)
 
+add_library(${PROJECT_NAME} INTERFACE)
+add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
+
 include(GNUInstallDirs)
 
 add_subdirectory(src)
