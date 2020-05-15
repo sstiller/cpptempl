@@ -1,0 +1,11 @@
+file(GLOB HDRS "*.h")
+
+set(HEADER_INSTALL_PATH include)
+
+target_include_directories(${PROJECT_NAME}
+  INTERFACE
+  $<INSTALL_INTERFACE:${HEADER_INSTALL_PATH}>
+)
+
+install(FILES ${HDRS} DESTINATION ${HEADER_INSTALL_PATH})
+
